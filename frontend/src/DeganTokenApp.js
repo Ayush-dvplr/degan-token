@@ -15,7 +15,7 @@ const DeganTokenApp = () => {
   const [isOwner, setIsOwner] = useState(false);
   const [storeStatus, setStoreStatus] = useState("");
 
-  const contractAddress = "0x2f0537927CD16b36A3cb7d06cc839AC51d816E93"; // Replace with your contract address
+  const contractAddress = "0xE7006Ec751EB47E1Ed21D7905c17f4446676Fe7a"; // Replace with your contract address
 
   useEffect(() => {
     const init = async () => {

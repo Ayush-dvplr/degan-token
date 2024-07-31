@@ -16,7 +16,7 @@ contract DeganToken is ERC20 {
     event RedemptionCodeGenerated(string code, uint256 amount);
     event Redeemed(address indexed from, address indexed to, uint256 amount, string code);
 
-    constructor() ERC20("DeganToken", "DGT") {
+    constructor() ERC20("DeganToken", "DGN") {
         owner = msg.sender;
     }
 
