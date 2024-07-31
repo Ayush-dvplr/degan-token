@@ -140,6 +140,8 @@ const DeganTokenApp = () => {
     } catch (error) {
       console.error(error);
       alert("Creating gift card failed : " + error?.message || "");
+    } finally {
+      setAmount("");
     }
   };
 
