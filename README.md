@@ -107,11 +107,7 @@ Start frontend from the terminalin frontend directory
 
 ## Screenshots
 
-![App Screenshot](https://res.cloudinary.com/dsprifizw/image/upload/v1719985348/homev2.png)
-
-![App Screenshot](https://res.cloudinary.com/dsprifizw/image/upload/v1719985466/createv2.png)
-
-![App Screenshot](https://res.cloudinary.com/dsprifizw/image/upload/v1719985686/editv2.png)
+![App Screenshot](https://res.cloudinary.com/dsprifizw/image/upload/v1722454124/degan-token-home.png)
 
 ## Lessons Learned
 
