@@ -78,25 +78,13 @@ contract DeganToken is ERC20 {
 Clone the project
 
 ```bash
-  git clone https://github.com/Ayush-dvplr/intermediate_eth_ass2.git
+  git clone https://github.com/Ayush-dvplr/degan-token.git
 ```
 
 Go to the project directory
 
 ```bash
-  cd intermediate_eth_ass2
-```
-
-Go to the blockchain directory
-
-```bash
-  cd blockchain
-```
-
-Install dependencies
-
-```bash
-  npm install
+  cd degan-token
 ```
 
 Go to the frontend directory from another terminal
@@ -109,18 +97,6 @@ Install dependencies
 
 ```bash
   npm install
-```
-
-Start the blockchain node from terminal which is in blockchain directory
-
-```bash
-  npx hardhat node
-```
-
-Start one more terminal in blockchain directory
-
-```bash
-  npx hardhat run --network localhost scripts/deploy.js
 ```
 
 Start frontend from the terminalin frontend directory
@@ -140,8 +116,6 @@ Start frontend from the terminalin frontend directory
 ## Lessons Learned
 
 - Integrate Solidity contracts with React using Hardhat and ensure ABI compatibility
-
-- Use Hardhat for local blockchain development to speed up testing and deployment
 
 - Utilize React hooks like useState and useEffect for efficient state management and handling blockchain interactions
 
