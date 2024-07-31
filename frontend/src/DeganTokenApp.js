@@ -79,6 +79,9 @@ const DeganTokenApp = () => {
     } catch (error) {
       console.error(error);
       alert(`Minting failed : ${error?.message}`);
+    } finally {
+      setAmount("");
+      setRecipient("");
     }
   };
 
@@ -92,6 +95,9 @@ const DeganTokenApp = () => {
     } catch (error) {
       console.error(error);
       alert(`Burning failed : ${error?.message}`);
+    } finally {
+      setAmount("");
+      setRecipient("");
     }
   };
 
@@ -108,6 +114,9 @@ const DeganTokenApp = () => {
     } catch (error) {
       console.error(error);
       alert(`transfer failed : ${error?.message}`);
+    } finally {
+      setAmount("");
+      setRecipient("");
     }
   };
 
@@ -169,6 +178,10 @@ const DeganTokenApp = () => {
     } catch (error) {
       console.error(error);
       alert(`reedemtion failed : ${error?.message}`);
+    } finally {
+      setAmount("");
+      setRecipient("");
+      setRedemptionCode("");
     }
   };
 
