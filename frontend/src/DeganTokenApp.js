@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ethers } from "ethers";
-import DeganTokenABI from "./DeganTokenABI.json"; // Import your ABI file
-import "./DeganTokenApp.css"; // Import your CSS file
+import DeganTokenABI from "./DeganTokenABI.json";
+import "./DeganTokenApp.css";
 
 const DeganTokenApp = () => {
   const [provider, setProvider] = useState(null);
@@ -10,12 +10,14 @@ const DeganTokenApp = () => {
   const [address, setAddress] = useState("");
   const [balance, setBalance] = useState("0");
   const [amount, setAmount] = useState("");
+  const [price, setPrice] = useState("");
   const [recipient, setRecipient] = useState("");
   const [redemptionCode, setRedemptionCode] = useState("");
   const [isOwner, setIsOwner] = useState(false);
   const [storeStatus, setStoreStatus] = useState("");
+  const [redemptionCodes, setRedemptionCodes] = useState([]);
 
-  const contractAddress = "0xE7006Ec751EB47E1Ed21D7905c17f4446676Fe7a"; // Replace with your contract address
+  const contractAddress = "0x6351560CF1d9BE26A2C5834294A7bd220b64F3a3";
 
   useEffect(() => {
     const init = async () => {
@@ -64,9 +66,24 @@ const DeganTokenApp = () => {
     setIsOwner(owner === address);
 
     const tx = await contract.storeAddress();
-    if (tx == "0x0000000000000000000000000000000000000000")
+    if (tx === "0x0000000000000000000000000000000000000000")
       setStoreStatus("Closed !");
     else setStoreStatus("Open !");
+
+    // Fetch all redemption codes
+    const codeList = await contract.getAllRedemptionCodes();
+    const codes = [];
+    for (let code of codeList) {
+      const details = await contract.redemptionCodes(code);
+      if (details.amount > 1) {
+        codes.push({
+          code,
+          amount: ethers.formatUnits(details.amount, 18),
+          price: ethers.formatUnits(details.price, 18),
+        });
+      }
+    }
+    setRedemptionCodes(codes);
   };
 
   const mint = async () => {
@@ -78,7 +95,7 @@ const DeganTokenApp = () => {
       alert("Tokens minted successfully");
     } catch (error) {
       console.error(error);
-      alert(`Minting failed : ${error?.message}`);
+      alert(`Minting failed: ${error?.message}`);
     } finally {
       setAmount("");
       setRecipient("");
@@ -94,7 +111,7 @@ const DeganTokenApp = () => {
       alert("Tokens burned successfully");
     } catch (error) {
       console.error(error);
-      alert(`Burning failed : ${error?.message}`);
+      alert(`Burning failed: ${error?.message}`);
     } finally {
       setAmount("");
       setRecipient("");
@@ -113,7 +130,7 @@ const DeganTokenApp = () => {
       alert("Tokens transferred successfully");
     } catch (error) {
       console.error(error);
-      alert(`transfer failed : ${error?.message}`);
+      alert(`Transfer failed: ${error?.message}`);
     } finally {
       setAmount("");
       setRecipient("");
@@ -127,21 +144,36 @@ const DeganTokenApp = () => {
           .toString(36)
           .substr(2, 16)
           .toUpperCase()}`;
-        console.log(code);
         const tx = await contract.generateRedemptionCode(
           code,
-          ethers.parseUnits(amount, 18)
+          ethers.parseUnits(amount, 18),
+          ethers.parseUnits(price, 18)
         );
         await tx.wait();
+        // Fetch all redemption codes
+        const codeList = await contract.getAllRedemptionCodes();
+        const codes = [];
+        for (let code of codeList) {
+          const details = await contract.redemptionCodes(code);
+          if (details.amount > 1) {
+            codes.push({
+              code,
+              amount: ethers.formatUnits(details.amount, 18),
+              price: ethers.formatUnits(details.price, 18),
+            });
+          }
+        }
+        setRedemptionCodes(codes);
         alert(`Gift card created with code: ${code}`);
       } else {
         alert("Only the owner can create gift cards");
       }
     } catch (error) {
       console.error(error);
-      alert("Creating gift card failed : " + error?.message || "");
+      alert("Creating gift card failed: " + (error?.message || ""));
     } finally {
       setAmount("");
+      setPrice("");
     }
   };
 
@@ -149,41 +181,48 @@ const DeganTokenApp = () => {
     try {
       if (isOwner) {
         const tx = await contract.storeAddress();
-        if (tx == "0x0000000000000000000000000000000000000000") {
+        if (tx === "0x0000000000000000000000000000000000000000") {
           await contract.setStoreAddress(address);
-          setStoreStatus("open");
-          alert(`store is open now`);
+          setStoreStatus("Open!");
+          alert(`Store is open now`);
         } else {
           await contract.setStoreAddress(
             "0x0000000000000000000000000000000000000000"
           );
-          setStoreStatus("closed");
-          alert(`store is closed now`);
+          setStoreStatus("Closed!");
+          alert(`Store is closed now`);
         }
       }
     } catch (error) {
       console.error(error);
-      alert("Creating gift card failed : " + error?.message || "");
+      alert("Toggling store failed: " + (error?.message || ""));
     }
   };
 
-  const redeem = async () => {
+  const redeem = async (amount, code) => {
     try {
-      const tx = await contract.redeem(
-        ethers.parseUnits(amount, 18),
-        redemptionCode
-      );
+      const tx = await contract.redeem(ethers.parseUnits(amount, 18), code);
       await tx.wait();
       const newBalance = await contract.balanceOf(address);
       setBalance(ethers.formatUnits(newBalance, 18));
+      // Fetch all redemption codes
+      const codeList = await contract.getAllRedemptionCodes();
+      const codes = [];
+      for (let code of codeList) {
+        const details = await contract.redemptionCodes(code);
+        if (details.amount > 1) {
+          codes.push({
+            code,
+            amount: ethers.formatUnits(details.amount, 18),
+            price: ethers.formatUnits(details.price, 18),
+          });
+        }
+      }
+      setRedemptionCodes(codes);
       alert("Tokens redeemed successfully");
     } catch (error) {
       console.error(error);
-      alert(`reedemtion failed : ${error?.message}`);
-    } finally {
-      setAmount("");
-      setRecipient("");
-      setRedemptionCode("");
+      alert(`Redemption failed: ${error?.message}`);
     }
   };
 
@@ -228,35 +267,64 @@ const DeganTokenApp = () => {
           </button>
         </div>
       </div>
-
       {isOwner && (
-        <>
-          <div className="action-container">
+        <div className="action-container">
+          <div>
+            <input
+              type="text"
+              placeholder="Amount for Gift Card"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="input-field"
+            />
+            <input
+              type="text"
+              placeholder="Price in DGN"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="input-field"
+            />
+          </div>
+          <div>
             <button onClick={createGiftCard} className="action-button">
               Create Gift Card
             </button>
           </div>
-          <div className="action-container">
-            store:{" "}
-            {
-              <button onClick={toggleStore} className="action-button">
-                {storeStatus}
-              </button>
-            }
-          </div>
-        </>
+        </div>
       )}
-      <div className="action-container">
-        <input
-          type="text"
-          placeholder="Redemption Code"
-          value={redemptionCode}
-          onChange={(e) => setRedemptionCode(e.target.value)}
-          className="input-field"
-        />
-        <button onClick={redeem} className="action-button">
-          Redeem
-        </button>
+      {isOwner && (
+        <div className="action-container">
+          <button onClick={toggleStore} className="action-button">
+            {storeStatus === "Closed !" ? "Open Store" : "Close Store"}
+          </button>
+        </div>
+      )}
+
+      <h2>Available Redemption Codes</h2>
+      <div className="redemption-code-list">
+        {redemptionCodes.length > 0 ? (
+          redemptionCodes.map((codeObj, index) => (
+            <div key={index} className="redemption-code-item">
+              <div className="code-info">
+                <strong>Code:</strong> {codeObj.code}
+              </div>
+              <div className="code-info">
+                <strong>Amount:</strong> {codeObj.amount} DGN
+              </div>
+              <div className="code-info">
+                <strong>Price:</strong> {codeObj.price} DGN
+              </div>
+              <button
+                onClick={() => redeem(codeObj.amount, codeObj.code)}
+                className="action-button"
+              >
+                Buy
+              </button>
+            </div>
+          ))
+        ) : (
+          <p>No redemption codes available</p>
+        )}
       </div>
     </div>
   );
