@@ -54,7 +54,7 @@ h1 {
 
 .redemption-code-list {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
 }
 
