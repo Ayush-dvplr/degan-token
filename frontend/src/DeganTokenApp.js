@@ -1,333 +1,370 @@
-import React, { useState, useEffect } from "react";
-import { ethers } from "ethers";
-import DeganTokenABI from "./DeganTokenABI.json";
+import React, { useEffect, useState } from "react";
+import { ethers, formatUnits, parseUnits } from "ethers";
 import "./DeganTokenApp.css";
+import DeganTokenABI from "./DeganTokenABI.json";
 
-const DeganTokenApp = () => {
-  const [provider, setProvider] = useState(null);
-  const [signer, setSigner] = useState(null);
+const contractAddress = "0xA55786A48929984415b12ec833e891d635582937";
+const abi = DeganTokenABI;
+
+function DeganTokenApp() {
+  const [userAddress, setUserAddress] = useState("");
+  const [dgnBalance, setDgnBalance] = useState("0");
   const [contract, setContract] = useState(null);
-  const [address, setAddress] = useState("");
-  const [balance, setBalance] = useState("0");
-  const [amount, setAmount] = useState("");
-  const [price, setPrice] = useState("");
-  const [recipient, setRecipient] = useState("");
-  const [redemptionCode, setRedemptionCode] = useState("");
+  const [nfts, setNfts] = useState([]);
+  const [userNfts, setUserNfts] = useState([]);
+  const [newNft, setNewNft] = useState({ name: "", url: "", price: "" });
   const [isOwner, setIsOwner] = useState(false);
-  const [storeStatus, setStoreStatus] = useState("");
-  const [redemptionCodes, setRedemptionCodes] = useState([]);
-
-  const contractAddress = "0x6351560CF1d9BE26A2C5834294A7bd220b64F3a3";
+  const [mintAmount, setMintAmount] = useState("");
+  const [burnAmount, setBurnAmount] = useState("");
+  const [transferDetails, setTransferDetails] = useState({
+    address: "",
+    amount: "",
+  });
+  const [storeAddress, setStoreAddress] = useState("");
 
   useEffect(() => {
     const init = async () => {
-      if (window.ethereum) {
+      if (typeof window.ethereum !== "undefined") {
         const provider = new ethers.BrowserProvider(window.ethereum);
-        setProvider(provider);
+        const signer = await provider.getSigner();
+        const contractInstance = new ethers.Contract(
+          contractAddress,
+          abi,
+          signer
+        );
 
-        window.ethereum.on("accountsChanged", handleAccountsChanged);
-        await handleAccountsChanged();
-      } else {
-        console.error("MetaMask not detected");
+        setContract(contractInstance);
+
+        const address = await signer.getAddress();
+        setUserAddress(address);
+
+        try {
+          const balance = await contractInstance.balanceOf(address);
+          setDgnBalance(balance ? formatUnits(balance, 18) : "0");
+        } catch (error) {
+          console.error("Error fetching balance:", error);
+          setDgnBalance("0");
+        }
+
+        const owner = await contractInstance.owner();
+        setIsOwner(owner === address);
+
+        try {
+          const storeAddr = await contractInstance.storeAddress();
+          setStoreAddress(storeAddr);
+        } catch (error) {
+          console.error("Error fetching store address:", error);
+          setStoreAddress("");
+        }
+
+        try {
+          const allNfts = await contractInstance.getAllNFTs();
+          const nftDetails = await Promise.all(
+            allNfts.map(async (nftName) => {
+              const nft = await contractInstance.NFTs(nftName);
+              return nft
+                ? {
+                    name: nftName,
+                    url: nft.url || "",
+                    price: nft.price || "0",
+                    isAvailable: nft.isAvailable || false,
+                  }
+                : null;
+            })
+          );
+          setNfts(nftDetails.filter((nft) => nft !== null));
+        } catch (error) {
+          console.error("Error fetching NFTs:", error);
+          setNfts([]);
+        }
+
+        try {
+          const userNftsList = await contractInstance.getUserNFTs();
+          const userNftDetails = await Promise.all(
+            userNftsList.map(async (nftName) => {
+              const nft = await contractInstance.NFTs(nftName);
+              return nft
+                ? {
+                    name: nftName,
+                    url: nft.url || "",
+                    price: nft.price || "0",
+                    isAvailable: nft.isAvailable || false,
+                  }
+                : null;
+            })
+          );
+          setUserNfts(userNftDetails.filter((nft) => nft !== null));
+        } catch (error) {
+          console.error("Error fetching user NFTs:", error);
+          setUserNfts([]);
+        }
       }
     };
 
     init();
 
+    window.ethereum.on("accountsChanged", init);
+
     return () => {
-      if (window.ethereum) {
-        window.ethereum.removeListener(
-          "accountsChanged",
-          handleAccountsChanged
-        );
-      }
+      window.ethereum.removeListener("accountsChanged", init);
     };
   }, []);
 
-  const handleAccountsChanged = async () => {
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    setSigner(signer);
-
-    const contract = new ethers.Contract(
-      contractAddress,
-      DeganTokenABI,
-      signer
-    );
-    setContract(contract);
-
-    const address = await signer.getAddress();
-    setAddress(address);
-
-    const balance = await contract.balanceOf(address);
-    setBalance(ethers.formatUnits(balance, 18));
-
-    const owner = await contract.owner();
-    setIsOwner(owner === address);
-
-    const tx = await contract.storeAddress();
-    if (tx === "0x0000000000000000000000000000000000000000")
-      setStoreStatus("Closed !");
-    else setStoreStatus("Open !");
-
-    // Fetch all redemption codes
-    const codeList = await contract.getAllRedemptionCodes();
-    const codes = [];
-    for (let code of codeList) {
-      const details = await contract.redemptionCodes(code);
-      if (details.amount > 1) {
-        codes.push({
-          code,
-          amount: ethers.formatUnits(details.amount, 18),
-          price: ethers.formatUnits(details.price, 18),
-        });
-      }
-    }
-    setRedemptionCodes(codes);
-  };
-
-  const mint = async () => {
+  const handleTransaction = async (transactionPromise, successMessage) => {
     try {
-      const tx = await contract.mint(address, ethers.parseUnits(amount, 18));
-      await tx.wait();
-      const newBalance = await contract.balanceOf(address);
-      setBalance(ethers.formatUnits(newBalance, 18));
-      alert("Tokens minted successfully");
-    } catch (error) {
-      console.error(error);
-      alert(`Minting failed: ${error?.message}`);
-    } finally {
-      setAmount("");
-      setRecipient("");
-    }
-  };
-
-  const burn = async () => {
-    try {
-      const tx = await contract.burn(ethers.parseUnits(amount, 18));
-      await tx.wait();
-      const newBalance = await contract.balanceOf(address);
-      setBalance(ethers.formatUnits(newBalance, 18));
-      alert("Tokens burned successfully");
-    } catch (error) {
-      console.error(error);
-      alert(`Burning failed: ${error?.message}`);
-    } finally {
-      setAmount("");
-      setRecipient("");
-    }
-  };
-
-  const transfer = async () => {
-    try {
-      const tx = await contract.transfer(
-        recipient,
-        ethers.parseUnits(amount, 18)
-      );
-      await tx.wait();
-      const newBalance = await contract.balanceOf(address);
-      setBalance(ethers.formatUnits(newBalance, 18));
-      alert("Tokens transferred successfully");
-    } catch (error) {
-      console.error(error);
-      alert(`Transfer failed: ${error?.message}`);
-    } finally {
-      setAmount("");
-      setRecipient("");
-    }
-  };
-
-  const createGiftCard = async () => {
-    try {
-      if (isOwner) {
-        const code = `GIFT${Math.random()
-          .toString(36)
-          .substr(2, 16)
-          .toUpperCase()}`;
-        const tx = await contract.generateRedemptionCode(
-          code,
-          ethers.parseUnits(amount, 18),
-          ethers.parseUnits(price, 18)
+      const tx = await transactionPromise;
+      const receipt = await tx.wait(); // Wait for transaction to be mined
+      if (receipt.status === 1) {
+        alert(successMessage);
+        const balance = await contract.balanceOf(userAddress);
+        setDgnBalance(formatUnits(balance, 18));
+        const userNftsList = await contract.getUserNFTs();
+        const userNftDetails = await Promise.all(
+          userNftsList.map(async (nftName) => {
+            const nft = await contract.NFTs(nftName);
+            return nft
+              ? {
+                  name: nftName,
+                  url: nft.url || "",
+                  price: nft.price || "0",
+                  isAvailable: nft.isAvailable || false,
+                }
+              : null;
+          })
         );
-        await tx.wait();
-        // Fetch all redemption codes
-        const codeList = await contract.getAllRedemptionCodes();
-        const codes = [];
-        for (let code of codeList) {
-          const details = await contract.redemptionCodes(code);
-          if (details.amount > 1) {
-            codes.push({
-              code,
-              amount: ethers.formatUnits(details.amount, 18),
-              price: ethers.formatUnits(details.price, 18),
-            });
-          }
-        }
-        setRedemptionCodes(codes);
-        alert(`Gift card created with code: ${code}`);
+        setUserNfts(userNftDetails.filter((nft) => nft !== null));
+        const allNfts = await contract.getAllNFTs();
+        const nftDetails = await Promise.all(
+          allNfts.map(async (nftName) => {
+            const nft = await contract.NFTs(nftName);
+            return nft
+              ? {
+                  name: nftName,
+                  url: nft.url || "",
+                  price: nft.price || "0",
+                  isAvailable: nft.isAvailable || false,
+                }
+              : null;
+          })
+        );
+        setNfts(nftDetails.filter((nft) => nft !== null));
       } else {
-        alert("Only the owner can create gift cards");
+        alert("Transaction failed!");
       }
     } catch (error) {
-      console.error(error);
-      alert("Creating gift card failed: " + (error?.message || ""));
-    } finally {
-      setAmount("");
-      setPrice("");
+      console.error("Transaction error:", error);
+      alert("Transaction failed.");
     }
   };
 
-  const toggleStore = async () => {
-    try {
-      if (isOwner) {
-        const tx = await contract.storeAddress();
-        if (tx === "0x0000000000000000000000000000000000000000") {
-          await contract.setStoreAddress(address);
-          setStoreStatus("Open!");
-          alert(`Store is open now`);
-        } else {
-          await contract.setStoreAddress(
-            "0x0000000000000000000000000000000000000000"
-          );
-          setStoreStatus("Closed!");
-          alert(`Store is closed now`);
-        }
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Toggling store failed: " + (error?.message || ""));
-    }
+  const mintDGN = async () => {
+    if (!isOwner) return;
+    handleTransaction(
+      contract.mint(userAddress, parseUnits(mintAmount, 18)),
+      "DGN minted successfully!"
+    );
+    setMintAmount("");
   };
 
-  const redeem = async (amount, code) => {
+  const burnDGN = async () => {
+    handleTransaction(
+      contract.burn(parseUnits(burnAmount, 18)),
+      "DGN burned successfully!"
+    );
+    setBurnAmount("");
+  };
+
+  const transferDGN = async () => {
+    handleTransaction(
+      contract.transfer(
+        transferDetails.address,
+        parseUnits(transferDetails.amount, 18)
+      ),
+      "DGN transferred successfully!"
+    );
+    setTransferDetails({ address: "", amount: "" });
+  };
+
+  const createNFT = async () => {
+    handleTransaction(
+      contract.generateNFT(
+        newNft.name,
+        newNft.url,
+        parseUnits(newNft.price, 18)
+      ),
+      "NFT created successfully!"
+    );
+    setNewNft({ name: "", url: "", price: "" });
+  };
+
+  const buyNFT = async (nftName) => {
+    handleTransaction(contract.redeem(nftName), "NFT purchased successfully!");
+  };
+
+  const toggleStoreAddress = async () => {
     try {
-      const tx = await contract.redeem(ethers.parseUnits(amount, 18), code);
-      await tx.wait();
-      const newBalance = await contract.balanceOf(address);
-      setBalance(ethers.formatUnits(newBalance, 18));
-      // Fetch all redemption codes
-      const codeList = await contract.getAllRedemptionCodes();
-      const codes = [];
-      for (let code of codeList) {
-        const details = await contract.redemptionCodes(code);
-        if (details.amount > 1) {
-          codes.push({
-            code,
-            amount: ethers.formatUnits(details.amount, 18),
-            price: ethers.formatUnits(details.price, 18),
-          });
-        }
-      }
-      setRedemptionCodes(codes);
-      alert("Tokens redeemed successfully");
+      const newStoreAddress =
+        storeAddress === "0x0000000000000000000000000000000000000000"
+          ? userAddress
+          : "0x0000000000000000000000000000000000000000";
+      await handleTransaction(
+        contract.setStoreAddress(newStoreAddress),
+        newStoreAddress === "0x0000000000000000000000000000000000000000"
+          ? "Store closed!"
+          : "Store opened!"
+      );
+      setStoreAddress(newStoreAddress);
     } catch (error) {
-      console.error(error);
-      alert(`Redemption failed: ${error?.message}`);
+      console.error("Error toggling store address:", error);
+      alert("Failed to toggle store address.");
     }
   };
 
   return (
-    <div className="app-container">
-      <h1>DeganToken</h1>
-      <div className="account-info">
-        <strong>Address:</strong> {address}
+    <>
+      <div>
+        <h2>DeganToken NFT Marketplace</h2>
       </div>
-      <div className="account-info">
-        <strong>Contract:</strong> {contractAddress}
-      </div>
-      <div className="account-info">
-        <strong>Balance:</strong> {balance} DGN
-      </div>
-      <div className="action-container">
-        <div>
-          <input
-            type="text"
-            placeholder="Amount"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="input-field"
-          />
-          <input
-            type="text"
-            placeholder="Recipient Address"
-            value={recipient}
-            onChange={(e) => setRecipient(e.target.value)}
-            className="input-field"
-          />
-        </div>
-        <div>
-          <button onClick={mint} className="action-button">
-            Mint
-          </button>
-          <button onClick={burn} className="action-button">
-            Burn
-          </button>
-          <button onClick={transfer} className="action-button">
-            Transfer
-          </button>
-        </div>
-      </div>
-      {isOwner && (
-        <div className="action-container">
-          <div>
-            <input
-              type="text"
-              placeholder="Amount for Gift Card"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="input-field"
-            />
-            <input
-              type="text"
-              placeholder="Price in DGN"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              className="input-field"
-            />
-          </div>
-          <div>
-            <button onClick={createGiftCard} className="action-button">
-              Create Gift Card
-            </button>
-          </div>
-        </div>
-      )}
-      {isOwner && (
-        <div className="action-container">
-          <button onClick={toggleStore} className="action-button">
-            {storeStatus === "Closed !" ? "Open Store" : "Close Store"}
-          </button>
-        </div>
-      )}
-
-      <h2>Available Redemption Codes</h2>
-      <div className="redemption-code-list">
-        {redemptionCodes.length > 0 ? (
-          redemptionCodes.map((codeObj, index) => (
-            <div key={index} className="redemption-code-item">
-              <div className="code-info">
-                <strong>Code:</strong> {codeObj.code}
-              </div>
-              <div className="code-info">
-                <strong>Amount:</strong> {codeObj.amount} DGN
-              </div>
-              <div className="code-info">
-                <strong>Price:</strong> {codeObj.price} DGN
-              </div>
-              <button
-                onClick={() => redeem(codeObj.amount, codeObj.code)}
-                className="action-button"
-              >
-                Buy
+      <div className="App">
+        <nav>
+          <p>User Address: {userAddress}</p>
+          <p>Contract Address: {contractAddress}</p>
+        </nav>
+        <nav>
+          <p>DGN Balance: {dgnBalance} DGN</p>
+        </nav>
+        <section>
+          {isOwner && (
+            <div>
+              <h3>Store Address</h3>
+              <button onClick={toggleStoreAddress}>
+                {storeAddress === "0x0000000000000000000000000000000000000000"
+                  ? "Set Store Address"
+                  : "Reset Store Address"}
               </button>
+              <p>
+                Status:{" "}
+                {storeAddress === "0x0000000000000000000000000000000000000000"
+                  ? "Store closed"
+                  : "Store open"}
+              </p>
             </div>
-          ))
-        ) : (
-          <p>No redemption codes available</p>
+          )}
+          {isOwner && (
+            <div>
+              <h3>Mint DGN (Owner Only)</h3>
+              <input
+                type="number"
+                placeholder="Amount to Mint"
+                value={mintAmount}
+                onChange={(e) => setMintAmount(e.target.value)}
+              />
+              <button onClick={mintDGN}>Mint DGN</button>
+            </div>
+          )}
+          <div>
+            <h3>Burn DGN</h3>
+            <input
+              type="number"
+              placeholder="Amount to Burn"
+              value={burnAmount}
+              onChange={(e) => setBurnAmount(e.target.value)}
+            />
+            <button onClick={burnDGN}>Burn DGN</button>
+          </div>
+          <div>
+            <h3>Transfer DGN</h3>
+            <input
+              type="text"
+              placeholder="Recipient Address"
+              value={transferDetails.address}
+              onChange={(e) =>
+                setTransferDetails({
+                  ...transferDetails,
+                  address: e.target.value,
+                })
+              }
+            />
+            <input
+              type="number"
+              placeholder="Amount to Transfer"
+              value={transferDetails.amount}
+              onChange={(e) =>
+                setTransferDetails({
+                  ...transferDetails,
+                  amount: e.target.value,
+                })
+              }
+            />
+            <button onClick={transferDGN}>Transfer DGN</button>
+          </div>
+        </section>
+
+        {isOwner && (
+          <section className="owner-section">
+            <h3>Create New NFT</h3>
+            <input
+              type="text"
+              placeholder="NFT Name"
+              value={newNft.name}
+              onChange={(e) => setNewNft({ ...newNft, name: e.target.value })}
+            />
+            <input
+              type="text"
+              placeholder="NFT URL"
+              value={newNft.url}
+              onChange={(e) => setNewNft({ ...newNft, url: e.target.value })}
+            />
+            <input
+              type="number"
+              placeholder="NFT Price (in DGN)"
+              value={newNft.price}
+              onChange={(e) => setNewNft({ ...newNft, price: e.target.value })}
+            />
+            <button onClick={createNFT}>Create NFT</button>
+          </section>
         )}
+
+        <section>
+          <h3>Available NFTs</h3>
+          {nfts.length > 0 ? (
+            <div className="nft-list">
+              {console.log({ nfts })}
+              {nfts.map((nft, index) => (
+                <div key={index} className="nft-item">
+                  <img src={nft.url} alt={nft.name} />
+                  <p>Name: {nft.name}</p>
+                  <p>Price: {formatUnits(nft.price, 18)} DGN</p>
+                  {nft.isAvailable && (
+                    <button onClick={() => buyNFT(nft.name)}>Buy</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p>No NFTs available.</p>
+          )}
+        </section>
+
+        <section>
+          <h3>Your NFTs</h3>
+          {userNfts.length > 0 ? (
+            <div className="nft-list">
+              {userNfts.map((nft, index) => (
+                <div key={index} className="nft-item">
+                  <img src={nft.url} alt={nft.name} />
+                  <p>Name: {nft.name}</p>
+                  <p>Price: {formatUnits(nft.price, 18)} DGN</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p>No NFTs owned.</p>
+          )}
+        </section>
       </div>
-    </div>
+    </>
   );
-};
+}
 
 export default DeganTokenApp;
