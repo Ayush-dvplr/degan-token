@@ -4,9 +4,7 @@ This Solidity program is a simple DeganToken contract that demonstrates the basi
 
 ## Description
 
-This program is a basic DeganToken contract written in Solidity, a programming language used for developing smart contracts on the Ethereum blockchain. The contract includes functionalities such as minting , burning , transfering ERC20 token also owner can create giftcards which can redeem by players to get the Token. This program serves as a simple and straightforward introduction to Solidity programming and can be used as a stepping stone for more complex projects in the future.
-
-In this smart contract we also implements the require(), assert() and revert() statements.
+This program is a basic DeganToken smart contract written in Solidity for the Ethereum blockchain. It includes essential functionalities such as minting, burning, and transferring ERC20 tokens. Additionally, the contract allows owners to create and manage unique NFTs, which players can redeem using the contract's tokens. This contract serves as a straightforward introduction to Solidity programming and provides a foundation for more complex blockchain projects.
 
 We are also going to use react and web3 to connect our blockchain to frontend.
 
@@ -22,14 +20,25 @@ contract DeganToken is ERC20 {
     address public owner;
     address public storeAddress;
 
-    mapping(string => uint256) public redemptionCodes;
+    struct NFT {
+        string name;
+        string url;
+        bool isAvailable;
+        uint256 price;
+    }
+
+    mapping(string => NFT) public NFTs;
+    string[] public allNFTs;
+
+    // Mapping to store NFTs bought by each user
+    mapping(address => string[]) public userNFTs;
 
     // Events
     event Minted(address indexed to, uint256 amount);
     event Burned(address indexed from, uint256 amount);
     event StoreAddressSet(address indexed storeAddress);
-    event RedemptionCodeGenerated(string code, uint256 amount);
-    event Redeemed(address indexed from, address indexed to, uint256 amount, string code);
+    event NFTGenerated(string name, string url, uint256 price);
+    event Redeemed(address indexed from, string name);
 
     constructor() ERC20("DeganToken", "DGN") {
         owner = msg.sender;
@@ -42,32 +51,42 @@ contract DeganToken is ERC20 {
 
     function mint(address to, uint256 amount) external onlyOwner {
         _mint(to, amount);
-        emit Minted(to, amount); // Emit Minted event
+        emit Minted(to, amount);
+    }
+
+    function burn(uint256 amount) external onlyOwner {
+        _burn(msg.sender, amount);
+        emit Burned(msg.sender, amount);
     }
 
     function setStoreAddress(address _storeAddress) external onlyOwner {
         storeAddress = _storeAddress;
-        emit StoreAddressSet(_storeAddress); // Emit StoreAddressSet event
+        emit StoreAddressSet(_storeAddress);
     }
 
-    function generateRedemptionCode(string memory code , uint256 amount) external onlyOwner {
-        redemptionCodes[code] = amount;
-        emit RedemptionCodeGenerated(code, amount); // Emit RedemptionCodeGenerated event
+    function generateNFT(string memory name, string memory url, uint256 price) external onlyOwner {
+        NFTs[name] = NFT({name: name, url: url, price: price, isAvailable: true});
+        allNFTs.push(name);
+        emit NFTGenerated(name, url, price);
     }
 
-    function redeem(uint256 amount, string memory code) external {
+    function redeem(string memory name) external {
         require(storeAddress != address(0), "Store address not set");
-        require(redemptionCodes[code] >= amount, "Invalid or insufficient redemption code");
+        require(balanceOf(msg.sender) >= NFTs[name].price, "Insufficient payment");
 
-        redemptionCodes[code] -= amount;
+        _burn(msg.sender, NFTs[name].price);
+        NFTs[name].isAvailable = false;
+        userNFTs[msg.sender].push(name);
 
-        _transfer(owner, msg.sender, amount);
-        emit Redeemed(owner, msg.sender, amount, code); // Emit Redeemed event
+        emit Redeemed(msg.sender, name);
     }
 
-    function burn(uint256 amount) external {
-        _burn(msg.sender, amount);
-        emit Burned(msg.sender, amount); // Emit Burned event
+    function getAllNFTs() external view returns (string[] memory) {
+        return allNFTs;
+    }
+
+    function getUserNFTs() external view returns (string[] memory) {
+        return userNFTs[msg.sender];
     }
 }
 
